@@ -1,0 +1,85 @@
+replicaCount: 1
+
+image:
+  repository: ""
+  pullPolicy: Always
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: "stream-producer"
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+
+podAnnotations: {}
+
+containerEnv:
+  - name: APP_PASSWORD
+    value: boomer
+  - name: APP_KAFKA_SECURITY_ENABLED
+    value: true
+  - name: APP_KAFKA_PARTITIONS
+    value: 3
+  - name: APP_KAFKA_SECURITY_USERNAME
+    valueFrom:
+      secretKeyRef:
+        name: kafka-user
+        key: username
+  - name: APP_KAFKA_SECURITY_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: kafka-user
+        key: password
+  - name: APP_KAFKA_BOOTSTRAPSERVERS
+    valueFrom:
+      secretKeyRef:
+        name: kafka-user
+        key: bootstrap-servers
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  ingressClassName: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/group.name: api
+    alb.ingress.kubernetes.io/load-balancer-name: api
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443},{"HTTPS":80}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    external-dns.alpha.kubernetes.io/hostname: api.relooup.com
+    external-dns.alpha.kubernetes.io/alias: "true"
+  hosts:
+    - host: api.relooup.com
+      paths:
+        - path: /
+  tls: []
+
+resources:
+   limits:
+     cpu: 100m
+     memory: 128Mi
+   requests:
+     cpu: 100m
+     memory: 128Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

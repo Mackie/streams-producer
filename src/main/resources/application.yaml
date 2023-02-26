@@ -1,0 +1,22 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "info, health, prometheus"
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+spring:
+  main:
+    banner-mode: off
+app:
+  password: "boomer"
+  kafka:
+    bootstrap-servers: "localhost:9092"
+    client-id: "stream-producer"
+    consumer-group-id: "stream-producer"
+    security:
+      enabled: false
+
+
