@@ -3,7 +3,6 @@ package com.mackie.streams.producer.handler
 import com.mackie.streams.producer.sender.StatusEventSender
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import org.springframework.boot.convert.DurationStyle
 import org.springframework.stereotype.Service
 import org.springframework.web.reactive.function.server.ServerRequest
 import org.springframework.web.reactive.function.server.ServerResponse
@@ -22,12 +21,22 @@ class StatusEventRequestHandler(
             ServerResponse.ok().buildAndAwait()
         }.getOrDefault(ServerResponse.badRequest().buildAndAwait())
 
-    suspend fun createRandomStatusEvents(request: ServerRequest): ServerResponse =
+    suspend fun createDriveEvents(request: ServerRequest): ServerResponse =
         runCatching {
-            mainEventSender.sendRandom(
-                request.awaitBody(),
-                request.queryParam("repeats").get().toInt(),
-                DurationStyle.detectAndParse(request.queryParam("frequency").get()),
+            mainEventSender.sendDriveEvents(
+                request.queryParam("vin").get(),
+                request.queryParam("stateOfCharge").get().toDouble(),
+                request.queryParam("stateOfChargeMin").get().toDouble()
+            )
+            ServerResponse.ok().buildAndAwait()
+        }.getOrDefault(ServerResponse.badRequest().buildAndAwait())
+
+    suspend fun createChargeEvents(request: ServerRequest): ServerResponse =
+        runCatching {
+            mainEventSender.sendChargeEvents(
+                request.queryParam("vin").get(),
+                request.queryParam("stateOfChargeStart").get().toDouble(),
+                request.queryParam("stateOfChargeMax").get().toDouble()
             )
             ServerResponse.ok().buildAndAwait()
         }.getOrDefault(ServerResponse.badRequest().buildAndAwait())

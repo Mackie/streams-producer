@@ -2,11 +2,11 @@ package com.mackie.streams.producer.sender
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mackie.streams.producer.config.KafkaConfiguration.Topics.VEHICLE_MAIN
-import com.mackie.streams.producer.domain.primitives.Vin
 import io.micrometer.prometheus.PrometheusMeterRegistry
 import kotlinx.coroutines.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.time.Duration
 import java.time.Instant
 
 @Service
@@ -16,14 +16,15 @@ class StatusEventSender(
     private val meterRegistry: PrometheusMeterRegistry
 ) {
 
-    val counter = meterRegistry.counter("app.events.status", "app", "streams-producer")
+    private val counter = meterRegistry.counter("app.events.status", "app", "streams-producer")
+    private val logger: Logger = LoggerFactory.getLogger(javaClass)
 
     suspend fun send(event: StatusEvent) = coroutineScope {
         withContext(Dispatchers.IO) {
             async {
                 val kafkaResponse = kafkaSenderService.send(
                     topic = VEHICLE_MAIN.topicName,
-                    key = event.vin.value,
+                    key = event.vin,
                     data = objectMapper.valueToTree(StatusEventKafka.of(event))
                 )
                 when (kafkaResponse) {
@@ -31,52 +32,107 @@ class StatusEventSender(
                         counter.increment()
                         true
                     }
+
                     else -> false
                 }
             }.await()
         }
     }
 
-    suspend fun sendRandom(event: StatusEvent, repeats: Int, frequency: Duration): Boolean {
+    suspend fun sendDriveEvents(vin: String, stateOfCharge: Double, stateOfChargeMin: Double): Boolean {
+        var kwhLeft = BATT_CAPACITY_KWH * stateOfCharge
+        val kwhMin = BATT_CAPACITY_KWH * stateOfChargeMin
+        var eventTimePointer = Instant.now()
         withContext(Dispatchers.IO) {
-            repeat(repeats) { rep ->
+            while (kwhLeft >= kwhMin) {
+                logger.info("Drive: ${kwhLeft / BATT_CAPACITY_KWH}, $eventTimePointer")
                 launch {
-                    when(kafkaSenderService.send(
+                    when (kafkaSenderService.send(
                         topic = VEHICLE_MAIN.topicName,
-                        key = event.vin.value,
-                        data = objectMapper.valueToTree(StatusEventKafka.of(event.copy(mileage = event.mileage + rep)))
+                        key = vin,
+                        data = objectMapper.valueToTree(
+                            StatusEventKafka(
+                                vin = vin,
+                                customerId = "cust01",
+                                stateOfCharge = kwhLeft / BATT_CAPACITY_KWH,
+                                createdAt = eventTimePointer
+                            )
+                        )
                     )) {
                         is KafkaSenderService.KafkaResponse.Success<*, *> -> {
                             counter.increment()
-                            delay(frequency.toMillis())
+                            delay(100)
                         }
+
                         else -> {}
                     }
                 }
+                eventTimePointer = eventTimePointer.plusSeconds(60)
+                kwhLeft -= 0.33
+            }
+        }
+        return true
+    }
+
+    suspend fun sendChargeEvents(vin: String, stateOfChargeStart: Double, stateOfChargeMax: Double): Boolean {
+        var kwhStart = BATT_CAPACITY_KWH * stateOfChargeStart
+        val kwhMax = BATT_CAPACITY_KWH * stateOfChargeMax
+        var eventTimePointer = Instant.now()
+        withContext(Dispatchers.IO) {
+            while (kwhMax >= kwhStart) {
+                logger.info("Charge: ${kwhStart / BATT_CAPACITY_KWH}, $eventTimePointer")
+                launch {
+                    when (kafkaSenderService.send(
+                        topic = VEHICLE_MAIN.topicName,
+                        key = vin,
+                        data = objectMapper.valueToTree(
+                            StatusEventKafka(
+                                vin = vin,
+                                customerId = "cust01",
+                                stateOfCharge = kwhStart / BATT_CAPACITY_KWH,
+                                createdAt = eventTimePointer
+                            )
+                        )
+                    )) {
+                        is KafkaSenderService.KafkaResponse.Success<*, *> -> {
+                            counter.increment()
+                            delay(100)
+                        }
+
+                        else -> {}
+                    }
+
+                }
+                eventTimePointer = eventTimePointer.plusSeconds(60)
+                kwhStart += 3
             }
         }
         return true
     }
 
     data class StatusEvent(
-        val vin: Vin,
+        val vin: String,
         val customerId: String,
-        val mileage: Int,
+        val stateOfCharge: Double
     )
 
     data class StatusEventKafka(
-        val vin: Vin,
+        val vin: String,
         val customerId: String,
+        val stateOfCharge: Double,
         val createdAt: Instant,
-        val mileage: Int,
     ) {
         companion object {
             fun of(statusEvent: StatusEvent) = StatusEventKafka(
                 vin = statusEvent.vin,
                 customerId = statusEvent.customerId,
-                createdAt = Instant.now(),
-                mileage = statusEvent.mileage
+                stateOfCharge = statusEvent.stateOfCharge,
+                createdAt = Instant.now()
             )
         }
+    }
+
+    companion object {
+        private const val BATT_CAPACITY_KWH = 80
     }
 }

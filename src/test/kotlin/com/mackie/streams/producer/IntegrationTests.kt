@@ -5,6 +5,7 @@ import com.mackie.streams.producer.sender.KafkaSenderService
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertDoesNotThrow
 import org.mockito.kotlin.*
@@ -50,7 +51,7 @@ class IntegrationTests {
                 {
                   "vin": "1",
                   "customerId": "1x1",
-                  "mileage": 1000
+                  "stateOfCharge": 1.0
                 }
             """.trimIndent()
 
@@ -71,39 +72,63 @@ class IntegrationTests {
         assertThat(consumedNode.get("vin").textValue()).isEqualTo("1")
         assertThat(consumedNode.get("customerId").textValue()).isEqualTo("1x1")
         assertDoesNotThrow { Instant.parse(consumedNode.get("createdAt").textValue()) }
-        assertThat(consumedNode.get("mileage").intValue()).isEqualTo(1000)
+        assertThat(consumedNode.get("stateOfCharge").doubleValue()).isEqualTo(1.0)
     }
 
     @Test
-    fun `a status event repeat is produced and consumed properly multiple times in kafka`() {
-        val repeat = 2
-        val payload = """
-                {
-                  "vin": "1",
-                  "customerId": "1x1",
-                  "mileage": 1000
-                }
-            """.trimIndent()
-
+    fun `produces a drive stream of events and sends it to kafka`() {
+        val expectedRepeat = 25
         webClient.post()
             .uri { uriBuilder ->
                 uriBuilder
-                    .path("/status/random")
-                    .queryParam("repeats", repeat)
-                    .queryParam("frequency", "1s")
+                    .path("/status/drive")
+                    .queryParam("vin", "1")
+                    .queryParam("stateOfCharge", 0.3)
+                    .queryParam("stateOfChargeMin", 0.2)
                     .build()
             }
             .header("auth", "boomer")
             .contentType(MediaType.APPLICATION_JSON)
             .accept(MediaType.APPLICATION_JSON)
-            .body(
-                BodyInserters.fromValue(payload)
-            )
             .exchange()
             .expectStatus().isOk
 
-        verifyBlocking(kafkaSenderService, times(repeat)) { send(any(), any(), any()) }
-        verify(consumer, times(repeat)).receive(any())
+        verifyBlocking(kafkaSenderService, times(expectedRepeat)) { send(any(), any(), any()) }
+        verify(consumer, times(expectedRepeat)).receive(any())
+
+        val argumentCaptor = argumentCaptor<ConsumerRecord<String, JsonNode>>()
+        verify(consumer, atLeast(1)).receive(argumentCaptor.capture())
+        val receivedEvents = argumentCaptor.allValues
+        assertThat(receivedEvents.size).isEqualTo(expectedRepeat)
+        assertTrue(receivedEvents.any { record -> record.value().get("stateOfCharge").doubleValue() >= 0.29 })
+    }
+
+    @Test
+    fun `produces a charge stream of events and sends it to kafka`() {
+        val expectedRepeat = 9
+        webClient.post()
+            .uri { uriBuilder ->
+                uriBuilder
+                    .path("/status/charge")
+                    .queryParam("vin", "1")
+                    .queryParam("stateOfChargeStart", 0.2)
+                    .queryParam("stateOfChargeMax", 0.5)
+                    .build()
+            }
+            .header("auth", "boomer")
+            .contentType(MediaType.APPLICATION_JSON)
+            .accept(MediaType.APPLICATION_JSON)
+            .exchange()
+            .expectStatus().isOk
+
+        verifyBlocking(kafkaSenderService, times(expectedRepeat)) { send(any(), any(), any()) }
+        verify(consumer, times(expectedRepeat)).receive(any())
+
+        val argumentCaptor = argumentCaptor<ConsumerRecord<String, JsonNode>>()
+        verify(consumer, atLeast(1)).receive(argumentCaptor.capture())
+        val receivedEvents = argumentCaptor.allValues
+        assertThat(receivedEvents.size).isEqualTo(expectedRepeat)
+        assertTrue(receivedEvents.any { record -> record.value().get("stateOfCharge").doubleValue() == 0.5 })
     }
 
     @Test

@@ -26,7 +26,8 @@ class RouterConfiguration : WebFluxConfigurer {
         filter(authFilter(authPassword))
         contentType(MediaType.APPLICATION_JSON)
         POST("/status", statusHandler::createStatusEvent)
-        POST("/status/random", statusHandler::createRandomStatusEvents)
+        POST("/status/drive", statusHandler::createDriveEvents)
+        POST("/status/charge", statusHandler::createChargeEvents)
         POST("/vehicle", vehicleHandler::createVehicleEvent)
         POST("/customer", customerHandler::createVehicleEvent)
     }
