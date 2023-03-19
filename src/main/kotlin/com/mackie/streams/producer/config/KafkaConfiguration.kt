@@ -5,7 +5,6 @@ import com.mackie.streams.producer.config.json.serde.JacksonSerdeDeserializer
 import com.mackie.streams.producer.config.json.serde.JacksonSerdeSerializer
 import io.micrometer.core.instrument.MeterRegistry
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.config.SaslConfigs
@@ -14,6 +13,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory
+import org.springframework.kafka.config.TopicBuilder
 import org.springframework.kafka.core.*
 
 @Configuration
@@ -28,13 +28,27 @@ class KafkaConfiguration(
     }
 
     @Bean
-    fun mainTopic(): NewTopic = NewTopic(Topics.VEHICLE_MAIN.topicName, appConfiguration.kafka.partitions, 1)
+    fun mainTopic() = TopicBuilder
+        .name(Topics.VEHICLE_MAIN.topicName)
+        .partitions(appConfiguration.kafka.partitions)
+        .replicas(2)
+        .build()
 
     @Bean
-    fun vehicleTopic(): NewTopic = NewTopic(Topics.VEHICLE_DETAILS.topicName, appConfiguration.kafka.partitions, 1)
+    fun vehicleTopic() = TopicBuilder
+        .name(Topics.VEHICLE_DETAILS.topicName)
+        .partitions(appConfiguration.kafka.partitions)
+        .replicas(2)
+        .compact()
+        .build()
 
     @Bean
-    fun customerTopic(): NewTopic = NewTopic(Topics.CUSTOMER.topicName, appConfiguration.kafka.partitions, 1)
+    fun customerTopic() = TopicBuilder
+        .name(Topics.CUSTOMER.topicName)
+        .partitions(appConfiguration.kafka.partitions)
+        .replicas(2)
+        .compact()
+        .build()
 
     @Bean
     fun kafkaAdmin(): KafkaAdmin {
@@ -75,7 +89,7 @@ class KafkaConfiguration(
             props[CommonClientConfigs.SECURITY_PROTOCOL_CONFIG] = "SASL_SSL"
             props[SaslConfigs.SASL_MECHANISM] = "SCRAM-SHA-512"
             props[SaslConfigs.SASL_JAAS_CONFIG] =
-                config(appConfiguration.kafka.security.username, appConfiguration.kafka.security.username)
+                config(appConfiguration.kafka.security.username, appConfiguration.kafka.security.password)
         }
         return props
     }
@@ -85,6 +99,7 @@ class KafkaConfiguration(
         props[ConsumerConfig.GROUP_ID_CONFIG] = appConfiguration.kafka.consumerGroupId
         props[ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG] = StringSerializer::class.java
         props[ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG] = JacksonSerdeSerializer::class.java
+        props[ProducerConfig.ACKS_CONFIG] = "1"
         return props
     }
 

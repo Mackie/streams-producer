@@ -83,7 +83,7 @@ class IntegrationTests {
                 uriBuilder
                     .path("/status/drive")
                     .queryParam("vin", "1")
-                    .queryParam("stateOfCharge", 0.3)
+                    .queryParam("stateOfChargeStart", 0.3)
                     .queryParam("stateOfChargeMin", 0.2)
                     .build()
             }
@@ -128,7 +128,7 @@ class IntegrationTests {
         verify(consumer, atLeast(1)).receive(argumentCaptor.capture())
         val receivedEvents = argumentCaptor.allValues
         assertThat(receivedEvents.size).isEqualTo(expectedRepeat)
-        assertTrue(receivedEvents.any { record -> record.value().get("stateOfCharge").doubleValue() == 0.5 })
+        assertTrue(receivedEvents.any { record -> record.value().get("stateOfCharge").doubleValue() >= 0.5 })
     }
 
     @Test

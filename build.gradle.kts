@@ -67,11 +67,28 @@ tasks.register("deploy") {
         exec {
             commandLine(
                 "helm",
-                "install",
+                "upgrade",
+                "--install",
+                "--namespace",
+                "pipeline",
                 "--set",
                 "image.repository=$ecrRepository",
                 appName,
                 "./charts"
+            )
+        }
+    }
+}
+
+tasks.register("undeploy") {
+    doLast {
+        exec {
+            commandLine(
+                "helm",
+                "uninstall",
+                appName,
+                "--namespace",
+                "pipeline"
             )
         }
     }

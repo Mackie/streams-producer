@@ -25,7 +25,7 @@ class StatusEventRequestHandler(
         runCatching {
             mainEventSender.sendDriveEvents(
                 request.queryParam("vin").get(),
-                request.queryParam("stateOfCharge").get().toDouble(),
+                request.queryParam("stateOfChargeStart").get().toDouble(),
                 request.queryParam("stateOfChargeMin").get().toDouble()
             )
             ServerResponse.ok().buildAndAwait()
